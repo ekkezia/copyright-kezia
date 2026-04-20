@@ -1,4 +1,4 @@
-# Hidden Watermark LED Art
+# NO COPYRIGHT © EKEZIA
 
 ## Overview
 
@@ -48,6 +48,9 @@ The project is a playful critique of art consumption in the digital age, where t
 - Upload the Arduino code (`teensy-with-watermark.ino`) to the Teensy 4.0.
 - Run the p5.js sketch (`p5js/sketch.js`) in a browser (served via localhost or similar).
 - Connect the Teensy to your computer via USB for serial communication.
+
+### Extra Tool
+- change `sketch.js` on p5js to `sketch-tool.js` to customize where you want the pixels to be flickered in a slower rate (marked as black color in the p5.js graphical representation, while the rest that flickers in default rate is marked as white). Basically, the pixels that are meant to be 'exposed' on camera will be the one that is flickered slightly slower. The flickering rate is hardcoded in the arduino file.
 
 ### Customizing the Watermark
 
