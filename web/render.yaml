@@ -1,0 +1,14 @@
+# Blueprint file. It lives in web/, so when creating the Blueprint in Render
+# set "Blueprint Path" to web/render.yaml. rootDir is relative to the repo root.
+
+services:
+  - type: web
+    name: flicker-matrix
+    runtime: node
+    rootDir: web
+    buildCommand: echo "no build"
+    startCommand: node server.js
+    plan: free
+    envVars:
+      - key: BRIDGE_TOKEN
+        generateValue: true

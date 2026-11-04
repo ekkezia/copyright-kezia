@@ -52,6 +52,11 @@ The project is a playful critique of art consumption in the digital age, where t
 ### Extra Tool
 - change `sketch.js` on p5js to `sketch-tool.js` to customize where you want the pixels to be flickered in a slower rate (marked as black color in the p5.js graphical representation, while the rest that flickers in default rate is marked as white). Basically, the pixels that are meant to be 'exposed' on camera will be the one that is flickered slightly slower. The flickering rate is hardcoded in the arduino file.
 
+### Web Input (8x32 flicker matrix)
+- `arduino/flicker_teensy_1x8x32_0910`: the original 8x32 flicker sketch (CYD LCD control).
+- `arduino/flicker_teensy_1x8x32_web`: the same sketch, which also takes words and drawings from the website.
+- `web/`: the website and server (deploys to Render) The same page connects the Teensy over Web Serial when you open it in Chrome on the laptop. See [web/README.md](web/README.md).
+
 ### Customizing the Watermark
 
 - In the Arduino code, locate the `FLICKERED_PIXELS` section.

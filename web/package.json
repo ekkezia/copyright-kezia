@@ -1,0 +1,13 @@
+{
+  "name": "flicker-matrix-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Website + server that sends words/drawings to the 8x32 flicker matrix",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

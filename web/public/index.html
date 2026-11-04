@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>No Copyright Matrix</title>
+<style>
+  :root {
+    --bg: #f4f4f1;
+    --ink: #111;
+    --muted: #6b6b66;
+    --line: #d6d6d0;
+    --on: #ffffff;
+    --off: #111111;
+    --accent: #111;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px 16px 64px;
+  }
+  h1 { font-size: 20px; margin: 0 0 6px; letter-spacing: 0.04em; }
+  p.lede { margin: 0 0 28px; color: var(--muted); }
+
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  input[type=text] {
+    font: inherit;
+    font-size: 22px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    width: 9.5ch;
+    padding: 8px 10px;
+    border: 2px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    border-radius: 0;
+  }
+  input[type=text]:focus { outline: 3px solid #999; outline-offset: 2px; }
+  button {
+    font: inherit;
+    padding: 10px 14px;
+    border: 2px solid var(--ink);
+    background: #fff;
+    color: var(--ink);
+    cursor: pointer;
+    border-radius: 0;
+  }
+  button:hover { background: #eaeae6; }
+  button.primary { background: var(--accent); color: #fff; }
+  button.primary:hover { background: #333; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .count { color: var(--muted); font-size: 13px; }
+
+  .frame {
+    background: #222;
+    padding: 10px;
+    border-radius: 4px;
+    margin: 8px 0 12px;
+  }
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(32, 1fr);
+    gap: 2px;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: crosshair;
+  }
+  #grid div {
+    aspect-ratio: 1;
+    background: var(--on);
+    border-radius: 1px;
+  }
+  #grid div.drawn { background: var(--off); outline: 1px solid #444; outline-offset: -1px; }
+
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+  #status { min-height: 1.4em; margin-top: 12px; }
+  #status.err { color: #b00020; }
+  #status.ok { color: #1a6b2a; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #aaa; margin-right: 6px; vertical-align: middle; }
+  .dot.live { background: #2a9d4b; }
+  footer { margin-top: 40px; color: var(--muted); font-size: 12px; }
+  footer button { font-size: 12px; padding: 2px 6px; border-width: 1px; }
+
+  /* ---------- phones: compact landscape layout ---------- */
+  @media (max-height: 500px), (orientation: portrait) and (max-width: 820px) {
+    main { padding: 10px 16px 6px; max-width: none; }
+    h1 { font-size: 15px; margin: 0 0 2px; }
+    p.lede { font-size: 12px; margin: 0 0 4px; }
+    .row { margin-bottom: 8px; }
+    input[type=text] { font-size: 18px; padding: 6px 8px; }
+    button { padding: 8px 12px; }
+    .frame { padding: 6px; margin: 4px 0 6px; }
+    #grid { gap: 1px; }
+    .hint { font-size: 11px; margin: 0 0 6px; }
+    #status { margin-top: 4px; font-size: 13px; }
+    footer { margin-top: 2px; }
+    /* word box and buttons share one line */
+    .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+    .controls .row { margin: 0; }
+  }
+
+  /* ---------- phone held upright: rotate the page 90° ---------- */
+  @media (orientation: portrait) and (max-width: 820px) {
+    html, body { height: 100%; overflow: hidden; }
+    main {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vh;
+      width: 100dvh;
+      height: 100vw;
+      overflow-y: auto;
+      transform-origin: top left;
+      transform: translateX(100vw) rotate(90deg);
+    }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>NO COPYRIGHT © EKEZIA</h1>
+  <p class="lede">Send a word to the LED matrix. Black pixels flicker, so they only show up through a camera.</p>
+
+  <div class="frame"><div id="grid" aria-label="32 by 8 pixel preview"></div></div>
+  <p class="hint">Type a word, or tap and drag on the preview to draw (start on a black pixel to erase).</p>
+
+  <div class="controls">
+    <div class="row">
+      <input id="word" type="text" maxlength="5" placeholder="WORD" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Word, up to 5 letters">
+      <span class="count"><span id="len">0</span>/5</span>
+    </div>
+    <div class="row">
+      <button id="send" class="primary">Send to matrix</button>
+      <button id="clear">Clear</button>
+      <button id="invert">Invert</button>
+    </div>
+  </div>
+
+  <div id="status"></div>
+  <footer>
+    <span id="dot" class="dot"></span><span id="live">checking matrix…</span>
+    <span id="link" hidden> · <button id="connectTeensy" type="button">connect teensy</button> <span id="linkStatus"></span></span>
+  </footer>
+</main>
+
+<script>
+const W = 32, H = 8;
+const cells = new Uint8Array(W * H);   // 1 = black / flicker
+
+// 5x7 font, one byte per column, bit 0 = top row.
+const FONT = {
+  ' ':[0,0,0],
+  '!':[0x5F], '?':[0x02,0x01,0x51,0x09,0x06], '.':[0x60,0x60], '-':[0x08,0x08,0x08,0x08],
+  '0':[0x3E,0x51,0x49,0x45,0x3E], '1':[0x42,0x7F,0x40], '2':[0x42,0x61,0x51,0x49,0x46],
+  '3':[0x21,0x41,0x45,0x4B,0x31], '4':[0x18,0x14,0x12,0x7F,0x10], '5':[0x27,0x45,0x45,0x45,0x39],
+  '6':[0x3C,0x4A,0x49,0x49,0x30], '7':[0x01,0x71,0x09,0x05,0x03], '8':[0x36,0x49,0x49,0x49,0x36],
+  '9':[0x06,0x49,0x49,0x29,0x1E],
+  A:[0x7C,0x12,0x11,0x12,0x7C], B:[0x7F,0x49,0x49,0x49,0x36], C:[0x3E,0x41,0x41,0x41,0x22],
+  D:[0x7F,0x41,0x41,0x22,0x1C], E:[0x7F,0x49,0x49,0x49,0x41], F:[0x7F,0x09,0x09,0x09,0x01],
+  G:[0x3E,0x41,0x49,0x49,0x7A], H:[0x7F,0x08,0x08,0x08,0x7F], I:[0x41,0x7F,0x41],
+  J:[0x20,0x40,0x41,0x3F,0x01], K:[0x7F,0x08,0x14,0x22,0x41], L:[0x7F,0x40,0x40,0x40,0x40],
+  M:[0x7F,0x02,0x0C,0x02,0x7F], N:[0x7F,0x04,0x08,0x10,0x7F], O:[0x3E,0x41,0x41,0x41,0x3E],
+  P:[0x7F,0x09,0x09,0x09,0x06], Q:[0x3E,0x41,0x51,0x21,0x5E], R:[0x7F,0x09,0x19,0x29,0x46],
+  S:[0x46,0x49,0x49,0x49,0x31], T:[0x01,0x01,0x7F,0x01,0x01], U:[0x3F,0x40,0x40,0x40,0x3F],
+  V:[0x1F,0x20,0x40,0x20,0x1F], W:[0x3F,0x40,0x38,0x40,0x3F], X:[0x63,0x14,0x08,0x14,0x63],
+  Y:[0x07,0x08,0x70,0x08,0x07], Z:[0x61,0x51,0x49,0x45,0x43],
+};
+
+const grid = document.getElementById('grid');
+const wordInput = document.getElementById('word');
+const statusEl = document.getElementById('status');
+
+for (let i = 0; i < W * H; i++) {
+  const d = document.createElement('div');
+  d.dataset.i = i;
+  grid.appendChild(d);
+}
+const els = grid.children;
+
+function render() {
+  for (let i = 0; i < W * H; i++) els[i].classList.toggle('drawn', cells[i] === 1);
+}
+
+function cleanWord(s) {
+  return s.toUpperCase().replace(/[^A-Z0-9 !?.\-]/g, '').slice(0, 5);
+}
+
+function drawWord(word) {
+  cells.fill(0);
+  const cols = [];
+  [...word].forEach((ch, n) => {
+    if (n > 0) cols.push(0);           // 1 column gap between letters
+    cols.push(...(FONT[ch] || []));
+  });
+  const x0 = Math.floor((W - cols.length) / 2);
+  const y0 = 0;                        // 7 rows tall, top-aligned in 8
+  cols.forEach((bits, cx) => {
+    const x = x0 + cx;
+    if (x < 0 || x >= W) return;
+    for (let r = 0; r < 7; r++) {
+      if (bits & (1 << r)) cells[(y0 + r) * W + x] = 1;
+    }
+  });
+  render();
+}
+
+wordInput.addEventListener('input', () => {
+  const w = cleanWord(wordInput.value);
+  if (w !== wordInput.value) wordInput.value = w;
+  document.getElementById('len').textContent = w.length;
+  drawWord(w);
+});
+wordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+
+// ---- drawing ----
+let painting = false, paintValue = 1, lastIdx = -1;
+
+function cellAt(e) {
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  return el && el.parentNode === grid ? Number(el.dataset.i) : -1;
+}
+function paint(i) {
+  if (i < 0 || i === lastIdx) return;
+  lastIdx = i;
+  cells[i] = paintValue;
+  els[i].classList.toggle('drawn', paintValue === 1);
+}
+grid.addEventListener('pointerdown', (e) => {
+  const i = cellAt(e);
+  if (i < 0) return;
+  painting = true;
+  lastIdx = -1;
+  paintValue = cells[i] ? 0 : 1;
+  paint(i);
+  e.preventDefault();
+});
+window.addEventListener('pointermove', (e) => { if (painting) paint(cellAt(e)); });
+window.addEventListener('pointerup', () => { painting = false; });
+window.addEventListener('pointercancel', () => { painting = false; });
+
+document.getElementById('clear').onclick = () => {
+  wordInput.value = '';
+  document.getElementById('len').textContent = 0;
+  cells.fill(0);
+  render();
+};
+document.getElementById('invert').onclick = () => {
+  for (let i = 0; i < cells.length; i++) cells[i] ^= 1;
+  render();
+};
+
+// ---- send ----
+const sendBtn = document.getElementById('send');
+function setStatus(msg, kind) {
+  statusEl.textContent = msg;
+  statusEl.className = kind || '';
+}
+
+async function send() {
+  sendBtn.disabled = true;
+  setStatus('Sending…');
+  try {
+    const res = await fetch('/api/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grid: Array.from(cells).join(''), word: cleanWord(wordInput.value) }),
+    });
+    const data = await res.json();
+    if (!data.ok) setStatus(data.error || 'Could not send', 'err');
+    else if (data.bridges > 0) setStatus('Sent. Look at the matrix through your camera.', 'ok');
+    else setStatus('Received, but the matrix is offline right now.', 'err');
+  } catch {
+    setStatus('Network error. Try again.', 'err');
+  }
+  setTimeout(() => { sendBtn.disabled = false; }, 1500);
+}
+sendBtn.onclick = send;
+
+// ---- matrix online indicator ----
+async function checkLive() {
+  try {
+    const { bridges } = await (await fetch('/api/status')).json();
+    document.getElementById('dot').classList.toggle('live', bridges > 0);
+    document.getElementById('live').textContent = bridges > 0 ? 'matrix online' : 'matrix offline';
+  } catch {}
+}
+checkLive();
+setInterval(checkLive, 10000);
+
+render();
+
+// ============================================================
+// TEENSY LINK (only on the laptop the Teensy is plugged into)
+// ============================================================
+//
+// Desktop Chrome/Edge only (Web Serial). Click "connect teensy",
+// enter BRIDGE_TOKEN from Render once (remembered), pick the Teensy.
+// From then on every submission from the server is written to the
+// Teensy as  M<256 x 0|1>\n . Reconnects by itself after a reload or
+// when the cable is plugged back in.
+//
+// Close the Arduino Serial Monitor first: only one program can open
+// the port.
+
+const link = {
+  port: null,
+  writer: null,
+  es: null,
+  serverOk: false,
+  last: '',
+};
+const linkStatus = document.getElementById('linkStatus');
+
+function getToken() {
+  try { return localStorage.getItem('bridgeToken') || ''; } catch { return ''; }
+}
+function saveToken(t) {
+  try { t ? localStorage.setItem('bridgeToken', t) : localStorage.removeItem('bridgeToken'); } catch {}
+}
+function showLink(extra) {
+  if (extra) link.last = extra;
+  const parts = [
+    link.port ? 'teensy connected' : 'teensy not connected',
+    link.es ? (link.serverOk ? 'receiving' : 'server connecting…') : '',
+    link.last,
+  ].filter(Boolean);
+  linkStatus.textContent = '(' + parts.join(' · ') + ')';
+  document.getElementById('connectTeensy').textContent = link.port ? 'reconnect teensy' : 'connect teensy';
+}
+
+// ---- server stream ----
+function startStream() {
+  const token = getToken();
+  if (!token || link.es) return;
+  link.es = new EventSource('/api/stream?token=' + encodeURIComponent(token));
+  link.es.onopen = () => { link.serverOk = true; showLink(); checkLive(); };
+  link.es.onerror = () => {
+    link.serverOk = false;
+    if (link.es.readyState === EventSource.CLOSED) {
+      // Server refused: wrong token. Forget it so the next click asks again.
+      link.es = null;
+      saveToken('');
+      showLink('wrong token, click connect again');
+    } else {
+      showLink();
+    }
+  };
+  link.es.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+    if (!/^M[01]{256}$/.test(msg.line)) return;
+    console.log(`#${msg.id} "${msg.word}" -> teensy`);
+    writeTeensy(msg.line);
+    showLink('last: ' + (msg.word || 'drawing'));
+  };
+  showLink();
+}
+
+// ---- serial ----
+async function openTeensy(p) {
+  if (link.port === p) return;
+  try {
+    await p.open({ baudRate: 115200 });   // baud is ignored by Teensy USB
+  } catch (e) {
+    showLink('could not open port (Serial Monitor open?)');
+    return;
+  }
+  link.port = p;
+  link.writer = p.writable.getWriter();
+  showLink();
+  readTeensy(p);
+}
+
+async function readTeensy(p) {
+  const decoder = new TextDecoder();
+  let buf = '';
+  const reader = p.readable.getReader();
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (line && !line.startsWith('Serial1 bytes')) console.log('teensy:', line);
+      }
+    }
+  } catch {
+    // unplugged
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function closeTeensy() {
+  try { link.writer && link.writer.releaseLock(); } catch {}
+  try { link.port && await link.port.close(); } catch {}
+  link.port = null;
+  link.writer = null;
+  showLink();
+}
+
+async function writeTeensy(line) {
+  if (!link.writer) { console.warn('teensy not connected, message dropped'); return; }
+  try {
+    await link.writer.write(new TextEncoder().encode(line + '\n'));
+  } catch (e) {
+    console.warn('write failed', e);
+  }
+}
+
+// Desktop only: phones never show the link.
+if ('serial' in navigator && matchMedia('(pointer: fine)').matches) {
+  document.getElementById('link').hidden = false;
+  showLink();
+
+  document.getElementById('connectTeensy').onclick = async () => {
+    if (!getToken()) {
+      const t = prompt('BRIDGE_TOKEN (Render → your service → Environment):');
+      if (!t || !t.trim()) return;
+      saveToken(t.trim());
+    }
+    startStream();
+    try {
+      // 0x16C0 = Teensy (PJRC).
+      const p = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x16c0 }] });
+      if (link.port && link.port !== p) await closeTeensy();
+      await openTeensy(p);
+    } catch {
+      // picker cancelled
+    }
+  };
+
+  // Already set up on this computer: reconnect without clicking.
+  if (getToken()) startStream();
+  navigator.serial.getPorts().then((ports) => { if (ports[0] && getToken()) openTeensy(ports[0]); });
+  navigator.serial.addEventListener('connect', (e) => { if (!link.port && getToken()) openTeensy(e.target); });
+  navigator.serial.addEventListener('disconnect', (e) => { if (e.target === link.port) closeTeensy(); });
+}
+</script>
+</body>
+</html>
