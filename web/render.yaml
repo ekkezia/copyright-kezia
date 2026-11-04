@@ -9,6 +9,4 @@ services:
     buildCommand: echo "no build"
     startCommand: node server.js
     plan: free
-    envVars:
-      - key: BRIDGE_TOKEN
-        generateValue: true
+    # Optional: add BRIDGE_TOKEN so only your laptop can receive words.

@@ -277,10 +277,31 @@ async function send() {
     if (!data.ok) setStatus(data.error || 'Could not send', 'err');
     else if (data.bridges > 0) setStatus('Sent. Look at the matrix through your camera.', 'ok');
     else setStatus('Received, but the matrix is offline right now.', 'err');
+    cooldown(Number(data.wait) || 0);
   } catch {
     setStatus('Network error. Try again.', 'err');
+    cooldown(0);
   }
-  setTimeout(() => { sendBtn.disabled = false; }, 1500);
+}
+
+// Button counts down until the server will accept another send.
+let cooldownTimer = null;
+function cooldown(seconds) {
+  clearInterval(cooldownTimer);
+  let left = Math.ceil(seconds);
+  const tick = () => {
+    if (left <= 0) {
+      clearInterval(cooldownTimer);
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send to matrix';
+      return;
+    }
+    sendBtn.disabled = true;
+    sendBtn.textContent = `Send again in ${left}s`;
+    left--;
+  };
+  tick();
+  cooldownTimer = setInterval(tick, 1000);
 }
 sendBtn.onclick = send;
 
@@ -301,8 +322,8 @@ render();
 // TEENSY LINK (only on the laptop the Teensy is plugged into)
 // ============================================================
 //
-// Desktop Chrome/Edge only (Web Serial). Click "connect teensy",
-// enter BRIDGE_TOKEN from Render once (remembered), pick the Teensy.
+// Desktop Chrome/Edge only (Web Serial). Click "connect teensy" and
+// pick the Teensy. (If BRIDGE_TOKEN is set on Render, it asks for it once.)
 // From then on every submission from the server is written to the
 // Teensy as  M<256 x 0|1>\n . Reconnects by itself after a reload or
 // when the cable is plugged back in.
@@ -337,18 +358,33 @@ function showLink(extra) {
 }
 
 // ---- server stream ----
+// Set once "connect teensy" has been clicked on this computer, so it
+// reconnects on reload. Other visitors never open the stream.
+function isLinked() {
+  try { return localStorage.getItem('teensyLink') === '1'; } catch { return false; }
+}
+function setLinked() {
+  try { localStorage.setItem('teensyLink', '1'); } catch {}
+}
+
 function startStream() {
+  if (link.es) return;
   const token = getToken();
-  if (!token || link.es) return;
-  link.es = new EventSource('/api/stream?token=' + encodeURIComponent(token));
+  link.es = new EventSource('/api/stream' + (token ? '?token=' + encodeURIComponent(token) : ''));
   link.es.onopen = () => { link.serverOk = true; showLink(); checkLive(); };
   link.es.onerror = () => {
     link.serverOk = false;
     if (link.es.readyState === EventSource.CLOSED) {
-      // Server refused: wrong token. Forget it so the next click asks again.
+      // Server refused: BRIDGE_TOKEN is set on Render and ours is missing/wrong.
       link.es = null;
       saveToken('');
-      showLink('wrong token, click connect again');
+      const t = prompt('This server needs BRIDGE_TOKEN (Render → your service → Environment):');
+      if (t && t.trim()) {
+        saveToken(t.trim());
+        startStream();
+      } else {
+        showLink('server needs a token, click connect again');
+      }
     } else {
       showLink();
     }
@@ -425,11 +461,7 @@ if ('serial' in navigator && matchMedia('(pointer: fine)').matches) {
   showLink();
 
   document.getElementById('connectTeensy').onclick = async () => {
-    if (!getToken()) {
-      const t = prompt('BRIDGE_TOKEN (Render → your service → Environment):');
-      if (!t || !t.trim()) return;
-      saveToken(t.trim());
-    }
+    setLinked();
     startStream();
     try {
       // 0x16C0 = Teensy (PJRC).
@@ -442,9 +474,9 @@ if ('serial' in navigator && matchMedia('(pointer: fine)').matches) {
   };
 
   // Already set up on this computer: reconnect without clicking.
-  if (getToken()) startStream();
-  navigator.serial.getPorts().then((ports) => { if (ports[0] && getToken()) openTeensy(ports[0]); });
-  navigator.serial.addEventListener('connect', (e) => { if (!link.port && getToken()) openTeensy(e.target); });
+  if (isLinked()) startStream();
+  navigator.serial.getPorts().then((ports) => { if (ports[0] && isLinked()) openTeensy(ports[0]); });
+  navigator.serial.addEventListener('connect', (e) => { if (!link.port && isLinked()) openTeensy(e.target); });
   navigator.serial.addEventListener('disconnect', (e) => { if (e.target === link.port) closeTeensy(); });
 }
 </script>

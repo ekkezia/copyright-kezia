@@ -20,14 +20,14 @@ Each submission arrives as one line: `M` + 256 × `0/1` + newline.
 
 The server has no dependencies (Node 18+).
 
-- **Blueprint:** push the repo, then in Render choose *New → Blueprint*, pick this repo and set **Blueprint Path** to `web/render.yaml`. It sets `rootDir: web` and generates a `BRIDGE_TOKEN`.
-- **Or manually:** *New → Web Service*, Root Directory `web`, Build Command `echo ok`, Start Command `node server.js`, and add an env var `BRIDGE_TOKEN` (any random string).
+- **Blueprint:** push the repo, then in Render choose *New → Blueprint*, pick this repo and set **Blueprint Path** to `web/render.yaml`. It sets `rootDir: web`.
+- **Or manually:** *New → Web Service*, Root Directory `web`, Build Command `echo ok`, Start Command `node server.js`, No environment variables are needed.
 
 Optional env vars:
 
 | Var | Default | What it does |
 |---|---|---|
-| `BRIDGE_TOKEN` | (none) | Password the laptop needs to receive drawings |
+| `BRIDGE_TOKEN` | (none) | Optional password so only your laptop can receive drawings. If set, the page asks for it once when you click **connect teensy**. |
 | `COOLDOWN_SECONDS` | `3` | How long each visitor waits between sends |
 | `MIRROR` | `0` | Set `1` if the word appears mirrored left↔right on the matrix |
 | `FLIP` | `0` | Set `1` if it appears upside down |
@@ -36,12 +36,11 @@ Optional env vars:
 
 1. Plug in the Teensy and close the Arduino Serial Monitor, because only one program can open the port at a time.
 2. In **Chrome or Edge** (Safari and Firefox have no Web Serial), open `https://YOUR-APP.onrender.com` and click **connect teensy** at the bottom.
-3. The first time, it asks for the token. Paste the `BRIDGE_TOKEN` value from Render (your service → **Environment**). That browser remembers it.
-4. Pick the Teensy (it shows as a USB serial device).
+3. Pick the Teensy (it shows as a USB serial device).
 
 After the first time, the page reconnects to the server and the Teensy on its own when you reload it or plug the cable back in.
 
-Phones never see the connect link. On another computer it does nothing without the token.
+Phones never see the connect link.
 The link's status shows `teensy connected · receiving · last: WORD`. The Teensy's `OK`/`ERR` replies appear in the browser console.
 
 Visitors see **matrix online** in the footer while the laptop is connected.

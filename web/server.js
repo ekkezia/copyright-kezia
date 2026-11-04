@@ -105,7 +105,7 @@ function handleSend(req, res) {
     const last = lastSendByIp.get(ip) || 0;
     if (now - last < COOLDOWN_MS) {
       const wait = Math.ceil((COOLDOWN_MS - (now - last)) / 1000);
-      return json(res, 429, { ok: false, error: `Wait ${wait}s before sending again` });
+      return json(res, 429, { ok: false, error: `Wait ${wait}s before sending again`, wait });
     }
     lastSendByIp.set(ip, now);
 
@@ -119,7 +119,7 @@ function handleSend(req, res) {
     }
 
     console.log(`send #${sendCount} word="${word}" -> ${bridges.size} bridge(s)`);
-    json(res, 200, { ok: true, bridges: bridges.size });
+    json(res, 200, { ok: true, bridges: bridges.size, wait: COOLDOWN_MS / 1000 });
   });
 }
 
