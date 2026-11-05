@@ -82,6 +82,10 @@
 
   .hint { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
   #status { min-height: 1.4em; margin-top: 12px; }
+  .latest { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; color: var(--muted); }
+  .latest canvas { width: 128px; height: 32px; image-rendering: pixelated; background: #222; padding: 2px; border-radius: 2px; }
+  .latest b { color: var(--ink); letter-spacing: 0.15em; }
+  .latest .on { color: #1a6b2a; }
   #status.err { color: #b00020; }
   #status.ok { color: #1a6b2a; }
   .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #aaa; margin-right: 6px; vertical-align: middle; }
@@ -145,6 +149,12 @@
   </div>
 
   <div id="status"></div>
+  <div class="latest" id="latest" hidden>
+    <span>Latest:</span>
+    <canvas id="latestCanvas" width="32" height="8" aria-hidden="true"></canvas>
+    <b id="latestWord"></b>
+    <span id="latestInfo"></span>
+  </div>
   <footer>
     <span id="dot" class="dot"></span><span id="live">checking matrix…</span>
     <span id="link" hidden> · <button id="connectTeensy" type="button">connect teensy</button> <span id="linkStatus"></span></span>
@@ -278,6 +288,7 @@ async function send() {
     else if (data.bridges > 0) setStatus('Sent. Look at the matrix through your camera.', 'ok');
     else setStatus('Received, but the matrix is offline right now.', 'err');
     cooldown(Number(data.wait) || 0);
+    if (data.ok) checkLive();
   } catch {
     setStatus('Network error. Try again.', 'err');
     cooldown(0);
@@ -306,15 +317,48 @@ function cooldown(seconds) {
 sendBtn.onclick = send;
 
 // ---- matrix online indicator ----
+let latestData = null;
+
+function timeAgo(iso) {
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s / 60) + ' min ago';
+  return Math.floor(s / 3600) + ' h ago';
+}
+
+function showLatest() {
+  const box = document.getElementById('latest');
+  const d = latestData;
+  if (!d) { box.hidden = true; return; }
+  box.hidden = false;
+
+  const ctx = document.getElementById('latestCanvas').getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#111';
+  for (let i = 0; i < W * H; i++) if (d.grid[i] === '1') ctx.fillRect(i % W, Math.floor(i / W), 1, 1);
+
+  document.getElementById('latestWord').textContent = d.word || '(drawing)';
+  const info = document.getElementById('latestInfo');
+  let state;
+  if (d.onMatrix) state = '<span class="on">on the matrix ✓</span>';
+  else if (d.delivered) state = 'sent, waiting for the matrix…';
+  else state = 'matrix was offline';
+  info.innerHTML = timeAgo(d.at) + ' · ' + state;
+}
+
 async function checkLive() {
   try {
-    const { bridges } = await (await fetch('/api/status')).json();
+    const { bridges, latest } = await (await fetch('/api/status')).json();
     document.getElementById('dot').classList.toggle('live', bridges > 0);
     document.getElementById('live').textContent = bridges > 0 ? 'matrix online' : 'matrix offline';
+    latestData = latest;
+    showLatest();
   } catch {}
 }
 checkLive();
-setInterval(checkLive, 10000);
+setInterval(checkLive, 4000);
+setInterval(showLatest, 1000);   // keep "x s ago" ticking
 
 render();
 
@@ -337,6 +381,7 @@ const link = {
   es: null,
   serverOk: false,
   last: '',
+  pending: [],   // ids written to the Teensy, waiting for OK M
 };
 const linkStatus = document.getElementById('linkStatus');
 
@@ -394,7 +439,7 @@ function startStream() {
     try { msg = JSON.parse(e.data); } catch { return; }
     if (!/^M[01]{256}$/.test(msg.line)) return;
     console.log(`#${msg.id} "${msg.word}" -> teensy`);
-    writeTeensy(msg.line);
+    writeTeensy(msg.line, msg.id);
     showLink('last: ' + (msg.word || 'drawing'));
   };
   showLink();
@@ -429,6 +474,10 @@ async function readTeensy(p) {
         const line = buf.slice(0, nl).trim();
         buf = buf.slice(nl + 1);
         if (line && !line.startsWith('Serial1 bytes')) console.log('teensy:', line);
+        if (line === 'OK M' || line === 'ERR M') {
+          const id = link.pending.shift();
+          if (line === 'OK M' && id) ackServer(id);
+        }
       }
     }
   } catch {
@@ -443,16 +492,29 @@ async function closeTeensy() {
   try { link.port && await link.port.close(); } catch {}
   link.port = null;
   link.writer = null;
+  link.pending = [];
   showLink();
 }
 
-async function writeTeensy(line) {
+async function writeTeensy(line, id) {
   if (!link.writer) { console.warn('teensy not connected, message dropped'); return; }
   try {
     await link.writer.write(new TextEncoder().encode(line + '\n'));
+    link.pending.push(id);
+    if (link.pending.length > 20) link.pending.shift();
   } catch (e) {
     console.warn('write failed', e);
   }
+}
+
+// Tell the server the Teensy took it, so every visitor sees "on the matrix".
+function ackServer(id) {
+  const token = getToken();
+  fetch('/api/ack' + (token ? '?token=' + encodeURIComponent(token) : ''), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  }).then(() => checkLive()).catch(() => {});
 }
 
 // Desktop only: phones never show the link.

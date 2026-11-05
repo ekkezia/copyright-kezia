@@ -4,7 +4,8 @@
 //   POST /api/send     { grid: "<256 x 0|1>", word } from the website
 //   GET  /api/stream   Server-Sent Events; the website listens to this on
 //                      the laptop the Teensy is plugged into ("connect teensy")
-//   GET  /api/status   { bridges: <number of Teensy laptops connected> }
+//   GET  /api/status   { bridges, latest: { id, word, grid, at, onMatrix } }
+//   POST /api/ack      { id } from the Teensy laptop once the Teensy replied OK
 //
 // No dependencies: runs on Node 18+ with `node server.js`.
 
@@ -41,6 +42,9 @@ const TYPES = {
 const bridges = new Set();
 const lastSendByIp = new Map();
 let sendCount = 0;
+
+// Last submission, shown to every visitor. onMatrix = Teensy replied OK.
+let latest = null;
 
 // ------------------------------------------------------------
 // Landscape grid (row by row, 32 x 8) -> Teensy mask order.
@@ -113,6 +117,7 @@ function handleSend(req, res) {
     const line = 'M' + gridToMask(grid);
 
     sendCount++;
+    latest = { id: sendCount, word, grid, at: new Date().toISOString(), onMatrix: false, delivered: bridges.size > 0 };
     const msg = JSON.stringify({ id: sendCount, word, grid, line, at: new Date().toISOString() });
     for (const b of bridges) {
       b.write(`data: ${msg}\n\n`);
@@ -120,6 +125,18 @@ function handleSend(req, res) {
 
     console.log(`send #${sendCount} word="${word}" -> ${bridges.size} bridge(s)`);
     json(res, 200, { ok: true, bridges: bridges.size, wait: COOLDOWN_MS / 1000 });
+  });
+}
+
+function handleAck(req, res, url) {
+  if (BRIDGE_TOKEN && url.searchParams.get('token') !== BRIDGE_TOKEN) {
+    return json(res, 401, { ok: false, error: 'Bad token' });
+  }
+  readBody(req, 256, (raw) => {
+    let id;
+    try { id = Number(JSON.parse(raw).id); } catch { id = NaN; }
+    if (latest && latest.id === id) latest.onMatrix = true;
+    json(res, 200, { ok: true });
   });
 }
 
@@ -170,7 +187,8 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'POST' && url.pathname === '/api/send') return handleSend(req, res);
   if (req.method === 'GET' && url.pathname === '/api/stream') return handleStream(req, res, url);
-  if (req.method === 'GET' && url.pathname === '/api/status') return json(res, 200, { bridges: bridges.size });
+  if (req.method === 'POST' && url.pathname === '/api/ack') return handleAck(req, res, url);
+  if (req.method === 'GET' && url.pathname === '/api/status') return json(res, 200, { bridges: bridges.size, latest });
   if (req.method === 'GET') return serveStatic(res, url.pathname);
 
   res.writeHead(405);
