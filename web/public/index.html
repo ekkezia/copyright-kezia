@@ -3,63 +3,71 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#000000">
 <title>No Copyright Matrix</title>
 <style>
   :root {
-    --bg: #f4f4f1;
-    --ink: #111;
-    --muted: #6b6b66;
-    --line: #d6d6d0;
-    --on: #ffffff;
-    --off: #111111;
-    --accent: #111;
+    --bg: #000;
+    --ink: #fff;
+    --muted: #8c8c8c;
+    --line: #333;
+    --frame: #2a2a2a;
+    --on: #ffffff;     /* LED pixel, steady */
+    --off: #000000;    /* LED pixel, flickers (drawn) */
+    --ok: #4cd07d;
+    --err: #ff6b6b;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { background: var(--bg); }
   body {
     margin: 0;
     background: var(--bg);
     color: var(--ink);
-    font: 16px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font: 16px/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
   main {
     max-width: 880px;
     margin: 0 auto;
     padding: 40px 16px 64px;
   }
-  h1 { font-size: 20px; margin: 0 0 6px; letter-spacing: 0.04em; }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 6px; letter-spacing: 0.02em; }
   p.lede { margin: 0 0 28px; color: var(--muted); }
 
   .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
-  input[type=text] {
+  input[type=text], input[type=password] {
     font: inherit;
     font-size: 22px;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    width: 9.5ch;
+    font-weight: 500;
     padding: 8px 10px;
-    border: 2px solid var(--ink);
-    background: #fff;
+    border: 1.5px solid var(--ink);
+    background: var(--bg);
     color: var(--ink);
     border-radius: 0;
   }
-  input[type=text]:focus { outline: 3px solid #999; outline-offset: 2px; }
+  input[type=text] { letter-spacing: 0.3em; text-transform: uppercase; width: 7.6em; }
+  input[type=password] { font-size: 16px; width: 14em; }
+  input::placeholder { color: #555; }
+  input:focus { outline: 2px solid var(--muted); outline-offset: 2px; }
   button {
     font: inherit;
+    font-weight: 500;
     padding: 10px 14px;
-    border: 2px solid var(--ink);
-    background: #fff;
+    border: 1.5px solid var(--ink);
+    background: var(--bg);
     color: var(--ink);
     cursor: pointer;
     border-radius: 0;
   }
-  button:hover { background: #eaeae6; }
-  button.primary { background: var(--accent); color: #fff; }
-  button.primary:hover { background: #333; }
-  button:disabled { opacity: 0.5; cursor: default; }
+  button:hover { background: #1a1a1a; }
+  button.primary { background: var(--ink); color: var(--bg); }
+  button.primary:hover { background: #d9d9d9; }
+  button:disabled { opacity: 0.45; cursor: default; }
   .count { color: var(--muted); font-size: 13px; }
 
   .frame {
-    background: #222;
+    background: var(--frame);
     padding: 10px;
     border-radius: 4px;
     margin: 8px 0 12px;
@@ -78,25 +86,48 @@
     background: var(--on);
     border-radius: 1px;
   }
-  #grid div.drawn { background: var(--off); outline: 1px solid #444; outline-offset: -1px; }
+  #grid div.drawn { background: var(--off); }
 
   .hint { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
   #status { min-height: 1.4em; margin-top: 12px; }
-  .latest { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; color: var(--muted); }
-  .latest canvas { width: 128px; height: 32px; image-rendering: pixelated; background: #222; padding: 2px; border-radius: 2px; }
-  .latest b { color: var(--ink); letter-spacing: 0.15em; }
-  .latest .on { color: #1a6b2a; }
-  #status.err { color: #b00020; }
-  #status.ok { color: #1a6b2a; }
-  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #aaa; margin-right: 6px; vertical-align: middle; }
-  .dot.live { background: #2a9d4b; }
-  footer { margin-top: 40px; color: var(--muted); font-size: 12px; }
-  footer button { font-size: 12px; padding: 2px 6px; border-width: 1px; }
+  #status.err { color: var(--err); }
+  #status.ok { color: var(--ok); }
+
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #555; margin-right: 6px; vertical-align: middle; }
+  .dot.live { background: var(--ok); }
+  footer { margin-top: 40px; color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+  footer button { font-size: 11px; padding: 3px 8px; border-width: 1px; letter-spacing: 0.08em; }
+
+  /* ---- tooltip ---- */
+  [data-tip] { position: relative; }
+  [data-tip]:hover::after, [data-tip]:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    white-space: nowrap;
+    background: var(--ink);
+    color: var(--bg);
+    font-size: 12px;
+    letter-spacing: 0;
+    padding: 6px 8px;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* ---- admin ---- */
+  #admin { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
+  #admin .err { color: var(--err); font-size: 13px; }
+  .latest { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .latest canvas { width: 128px; height: 32px; image-rendering: pixelated; background: var(--frame); padding: 2px; border-radius: 2px; }
+  .latest b { color: var(--ink); font-size: 16px; letter-spacing: 0.15em; }
+  .latest .on { color: var(--ok); }
+  .latest button { font-size: 11px; padding: 3px 8px; border-width: 1px; }
 
   /* ---------- phones: compact landscape layout ---------- */
   @media (max-height: 500px), (orientation: portrait) and (max-width: 820px) {
     main { padding: 10px 16px 6px; max-width: none; }
-    h1 { font-size: 15px; margin: 0 0 2px; }
+    h1 { font-size: 16px; margin: 0 0 2px; }
     p.lede { font-size: 12px; margin: 0 0 4px; }
     .row { margin-bottom: 8px; }
     input[type=text] { font-size: 18px; padding: 6px 8px; }
@@ -106,6 +137,7 @@
     .hint { font-size: 11px; margin: 0 0 6px; }
     #status { margin-top: 4px; font-size: 13px; }
     footer { margin-top: 2px; }
+    #admin { margin-top: 6px; padding-top: 6px; }
     /* word box and buttons share one line */
     .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
     .controls .row { margin: 0; }
@@ -149,15 +181,26 @@
   </div>
 
   <div id="status"></div>
-  <div class="latest" id="latest" hidden>
-    <span>Latest:</span>
-    <canvas id="latestCanvas" width="32" height="8" aria-hidden="true"></canvas>
-    <b id="latestWord"></b>
-    <span id="latestInfo"></span>
-  </div>
+
+  <section id="admin" hidden>
+    <form id="adminForm" class="row" hidden>
+      <input id="adminPass" type="password" placeholder="Admin password" autocomplete="current-password" aria-label="Admin password">
+      <button type="submit">Unlock</button>
+      <span id="adminErr" class="err"></span>
+    </form>
+    <div class="latest" id="latest" hidden>
+      <span>Latest secret:</span>
+      <canvas id="latestCanvas" width="32" height="8" aria-hidden="true"></canvas>
+      <b id="latestWord">—</b>
+      <span id="latestInfo">nothing sent yet</span>
+      <button id="adminLock" type="button">Lock</button>
+    </div>
+  </section>
+
   <footer>
-    <span id="dot" class="dot"></span><span id="live">checking matrix…</span>
-    <span id="link" hidden> · <button id="connectTeensy" type="button">connect teensy</button> <span id="linkStatus"></span></span>
+    <span><span id="dot" class="dot"></span><span id="live">checking matrix…</span></span>
+    <button id="adminBtn" type="button" data-tip="Admin can see latest sent secret">ADMIN</button>
+    <span id="link" hidden><button id="connectTeensy" type="button">connect teensy</button> <span id="linkStatus"></span></span>
   </footer>
 </main>
 
@@ -288,7 +331,7 @@ async function send() {
     else if (data.bridges > 0) setStatus('Sent. Look at the matrix through your camera.', 'ok');
     else setStatus('Received, but the matrix is offline right now.', 'err');
     cooldown(Number(data.wait) || 0);
-    if (data.ok) checkLive();
+    if (data.ok) refreshAdmin();
   } catch {
     setStatus('Network error. Try again.', 'err');
     cooldown(0);
@@ -316,8 +359,40 @@ function cooldown(seconds) {
 }
 sendBtn.onclick = send;
 
-// ---- matrix online indicator ----
+// ---- matrix online indicator (public) ----
+async function checkLive() {
+  try {
+    const { bridges } = await (await fetch('/api/status')).json();
+    document.getElementById('dot').classList.toggle('live', bridges > 0);
+    document.getElementById('live').textContent = bridges > 0 ? 'matrix online' : 'matrix offline';
+  } catch {}
+}
+checkLive();
+setInterval(checkLive, 10000);
+
+render();
+
+// ============================================================
+// ADMIN: see the latest sent secret
+// ============================================================
+//
+// The password is ADMIN_PASSWORD from the Render environment. Once
+// it is accepted it is saved in this device's localStorage, so the
+// latest secret shows up every time until "Lock" is pressed.
+
+const adminEl = document.getElementById('admin');
+const adminForm = document.getElementById('adminForm');
+const adminPass = document.getElementById('adminPass');
+const adminErr = document.getElementById('adminErr');
+const latestEl = document.getElementById('latest');
 let latestData = null;
+
+function getAdminPass() {
+  try { return localStorage.getItem('adminPassword') || ''; } catch { return ''; }
+}
+function setAdminPass(p) {
+  try { p ? localStorage.setItem('adminPassword', p) : localStorage.removeItem('adminPassword'); } catch {}
+}
 
 function timeAgo(iso) {
   const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
@@ -327,40 +402,94 @@ function timeAgo(iso) {
 }
 
 function showLatest() {
-  const box = document.getElementById('latest');
+  if (latestEl.hidden) return;
   const d = latestData;
-  if (!d) { box.hidden = true; return; }
-  box.hidden = false;
-
   const ctx = document.getElementById('latestCanvas').getContext('2d');
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#111';
+  if (!d) {
+    document.getElementById('latestWord').textContent = '—';
+    document.getElementById('latestInfo').textContent = 'nothing sent yet';
+    return;
+  }
+  ctx.fillStyle = '#000';
   for (let i = 0; i < W * H; i++) if (d.grid[i] === '1') ctx.fillRect(i % W, Math.floor(i / W), 1, 1);
 
   document.getElementById('latestWord').textContent = d.word || '(drawing)';
-  const info = document.getElementById('latestInfo');
   let state;
   if (d.onMatrix) state = '<span class="on">on the matrix ✓</span>';
   else if (d.delivered) state = 'sent, waiting for the matrix…';
   else state = 'matrix was offline';
-  info.innerHTML = timeAgo(d.at) + ' · ' + state;
+  document.getElementById('latestInfo').innerHTML = timeAgo(d.at) + ' · ' + state;
 }
 
-async function checkLive() {
+function showAdminForm(message) {
+  adminEl.hidden = false;
+  latestEl.hidden = true;
+  adminForm.hidden = false;
+  adminErr.textContent = message || '';
+  adminPass.value = '';
+  adminPass.focus();
+}
+
+// Asks the server for the latest secret. Returns true if the password worked.
+async function refreshAdmin() {
+  const pass = getAdminPass();
+  if (!pass) return false;
   try {
-    const { bridges, latest } = await (await fetch('/api/status')).json();
-    document.getElementById('dot').classList.toggle('live', bridges > 0);
-    document.getElementById('live').textContent = bridges > 0 ? 'matrix online' : 'matrix offline';
-    latestData = latest;
+    const res = await fetch('/api/latest', { headers: { 'x-admin-password': pass } });
+    const data = await res.json();
+    if (res.status === 401) {
+      setAdminPass('');
+      if (!adminEl.hidden) showAdminForm('Wrong password');
+      return false;
+    }
+    if (!data.ok) {
+      if (!adminEl.hidden) { adminForm.hidden = false; latestEl.hidden = true; adminErr.textContent = data.error; }
+      return false;
+    }
+    latestData = data.latest;
+    adminForm.hidden = true;
+    latestEl.hidden = false;
     showLatest();
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
-checkLive();
-setInterval(checkLive, 4000);
-setInterval(showLatest, 1000);   // keep "x s ago" ticking
 
-render();
+document.getElementById('adminBtn').onclick = async () => {
+  if (!adminEl.hidden) { adminEl.hidden = true; return; }   // toggle closed
+  adminEl.hidden = false;
+  if (!(await refreshAdmin())) {
+    if (adminForm.hidden || !adminErr.textContent) showAdminForm();
+  }
+};
+
+adminForm.onsubmit = async (e) => {
+  e.preventDefault();
+  const p = adminPass.value;
+  if (!p) return;
+  setAdminPass(p);
+  adminErr.textContent = 'Checking…';
+  const ok = await refreshAdmin();
+  // refreshAdmin shows "Wrong password" / server errors itself.
+  if (!ok && adminErr.textContent === 'Checking…') adminErr.textContent = 'Could not reach the server';
+};
+
+document.getElementById('adminLock').onclick = () => {
+  setAdminPass('');
+  latestData = null;
+  adminEl.hidden = true;
+};
+
+// Saved password on this device: open the admin view straight away.
+if (getAdminPass()) {
+  adminEl.hidden = false;
+  refreshAdmin().then((ok) => { if (!ok && adminForm.hidden) adminEl.hidden = true; });
+}
+setInterval(() => { if (!latestEl.hidden) refreshAdmin(); }, 4000);
+setInterval(showLatest, 1000);   // keep "x s ago" ticking
 
 // ============================================================
 // TEENSY LINK (only on the laptop the Teensy is plugged into)
@@ -425,9 +554,8 @@ function startStream() {
     let msg;
     try { msg = JSON.parse(e.data); } catch { return; }
     if (!/^M[01]{256}$/.test(msg.line)) return;
-    console.log(`#${msg.id} "${msg.word}" -> teensy`);
     writeTeensy(msg.line, msg.id);
-    showLink('last: ' + (msg.word || 'drawing'));
+    showLink('received #' + msg.id);   // word stays secret, see ADMIN
   };
   showLink();
 }
@@ -460,7 +588,7 @@ async function readTeensy(p) {
       while ((nl = buf.indexOf('\n')) >= 0) {
         const line = buf.slice(0, nl).trim();
         buf = buf.slice(nl + 1);
-        if (line && !line.startsWith('Serial1 bytes')) console.log('teensy:', line);
+        if (line && !line.startsWith('Serial1 bytes') && !line.startsWith('USB cmd')) console.log('teensy:', line);
         if (line === 'OK M' || line === 'ERR M') {
           const id = link.pending.shift();
           if (line === 'OK M' && id) ackServer(id);
@@ -494,13 +622,13 @@ async function writeTeensy(line, id) {
   }
 }
 
-// Tell the server the Teensy took it, so every visitor sees "on the matrix".
+// Tell the server the Teensy took it ("on the matrix ✓" in ADMIN).
 function ackServer(id) {
   fetch('/api/ack', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id }),
-  }).then(() => checkLive()).catch(() => {});
+  }).then(() => refreshAdmin()).catch(() => {});
 }
 
 // Desktop only: phones never show the link.

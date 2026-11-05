@@ -21,12 +21,13 @@ Each submission arrives as one line: `M` + 256 × `0/1` + newline.
 The server has no dependencies (Node 18+).
 
 - **Blueprint:** push the repo, then in Render choose *New → Blueprint*, pick this repo and set **Blueprint Path** to `web/render.yaml`. It sets `rootDir: web`.
-- **Or manually:** *New → Web Service*, Root Directory `web`, Build Command `echo ok`, Start Command `node server.js`. No environment variables are needed.
+- **Or manually:** *New → Web Service*, Root Directory `web`, Build Command `echo ok`, Start Command `node server.js`. Add `ADMIN_PASSWORD` under Environment to turn on the ADMIN view.
 
 Optional env vars:
 
 | Var | Default | What it does |
 |---|---|---|
+| `ADMIN_PASSWORD` | (none) | Password for the **ADMIN** button, which shows the latest sent secret. Admin stays off until this is set. |
 | `COOLDOWN_SECONDS` | `3` | How long each visitor waits between sends |
 | `MIRROR` | `0` | Set `1` if the word appears mirrored left↔right on the matrix |
 | `FLIP` | `0` | Set `1` if it appears upside down |
@@ -55,3 +56,8 @@ cd web && node server.js      # then open http://localhost:3000 in Chrome
 ## Orientation
 
 The preview is landscape: 32 wide × 8 tall. The server converts it to the Teensy mask order used in `data.ino`: preview x → mask row, preview y → 7 − mask column. This was checked against the "KEZIA" mask in `data.ino`.
+
+## Admin
+
+Click **ADMIN** in the footer and enter `ADMIN_PASSWORD` to see the latest secret: the word, a preview of the drawing, when it was sent, and whether it reached the matrix. The device remembers the password in its local storage until you press **Lock**. Five wrong tries block that IP address for one minute.
+

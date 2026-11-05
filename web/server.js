@@ -4,18 +4,25 @@
 //   POST /api/send     { grid: "<256 x 0|1>", word } from the website
 //   GET  /api/stream   Server-Sent Events; the website listens to this on
 //                      the laptop the Teensy is plugged into ("connect teensy")
-//   GET  /api/status   { bridges, latest: { id, word, grid, at, onMatrix } }
+//   GET  /api/status   { bridges }  (public)
+//   GET  /api/latest   { latest: { id, word, grid, at, onMatrix } }
+//                      admin only: header x-admin-password = ADMIN_PASSWORD
 //   POST /api/ack      { id } from the Teensy laptop once the Teensy replied OK
 //
 // No dependencies: runs on Node 18+ with `node server.js`.
 
 const http = require('http');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
 const PORT = process.env.PORT || 3000;
 
 // Seconds one visitor has to wait between sends.
+// Password for the ADMIN view (see the latest secret). Admin is
+// disabled until this is set in the Render environment.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+
 const COOLDOWN_MS = Number(process.env.COOLDOWN_SECONDS || 3) * 1000;
 
 // Orientation fixes, if the word shows up mirrored or upside down on
@@ -38,6 +45,7 @@ const TYPES = {
 
 const bridges = new Set();
 const lastSendByIp = new Map();
+const adminFails = new Map();   // ip -> { count, until }
 let sendCount = 0;
 
 // Last submission, shown to every visitor. onMatrix = Teensy replied OK.
@@ -115,7 +123,8 @@ function handleSend(req, res) {
 
     sendCount++;
     latest = { id: sendCount, word, grid, at: new Date().toISOString(), onMatrix: false, delivered: bridges.size > 0 };
-    const msg = JSON.stringify({ id: sendCount, word, grid, line, at: new Date().toISOString() });
+    // Only the pixel line goes out: the word stays secret (ADMIN only).
+    const msg = JSON.stringify({ id: sendCount, line });
     for (const b of bridges) {
       b.write(`data: ${msg}\n\n`);
     }
@@ -123,6 +132,36 @@ function handleSend(req, res) {
     console.log(`send #${sendCount} word="${word}" -> ${bridges.size} bridge(s)`);
     json(res, 200, { ok: true, bridges: bridges.size, wait: COOLDOWN_MS / 1000 });
   });
+}
+
+function sameText(a, b) {
+  const ha = crypto.createHash('sha256').update(String(a)).digest();
+  const hb = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
+function handleLatest(req, res) {
+  if (!ADMIN_PASSWORD) {
+    return json(res, 503, { ok: false, error: 'ADMIN_PASSWORD is not set on the server' });
+  }
+
+  // 5 wrong passwords -> blocked for 60 s.
+  const ip = clientIp(req);
+  const fail = adminFails.get(ip);
+  if (fail && fail.count >= 5 && Date.now() < fail.until) {
+    return json(res, 429, { ok: false, error: 'Too many tries, wait a minute' });
+  }
+
+  if (!sameText(req.headers['x-admin-password'] || '', ADMIN_PASSWORD)) {
+    const f = fail && Date.now() < fail.until ? fail : { count: 0 };
+    f.count++;
+    f.until = Date.now() + 60000;
+    adminFails.set(ip, f);
+    return json(res, 401, { ok: false, error: 'Wrong password' });
+  }
+
+  adminFails.delete(ip);
+  json(res, 200, { ok: true, latest, bridges: bridges.size });
 }
 
 function handleAck(req, res) {
@@ -179,7 +218,8 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/send') return handleSend(req, res);
   if (req.method === 'GET' && url.pathname === '/api/stream') return handleStream(req, res, url);
   if (req.method === 'POST' && url.pathname === '/api/ack') return handleAck(req, res);
-  if (req.method === 'GET' && url.pathname === '/api/status') return json(res, 200, { bridges: bridges.size, latest });
+  if (req.method === 'GET' && url.pathname === '/api/status') return json(res, 200, { bridges: bridges.size });
+  if (req.method === 'GET' && url.pathname === '/api/latest') return handleLatest(req, res);
   if (req.method === 'GET') return serveStatic(res, url.pathname);
 
   res.writeHead(405);
