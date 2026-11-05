@@ -16,6 +16,9 @@
 // Extra commands added in this version:
 //
 //   C            clear the mask (nothing flickers)
+//   D<pct>       modulating (flicker) pixel brightness, 0-100 %, default 100
+//   A            steady pixels auto-match the flicker brightness again
+//                (B<pct> switches auto-match off and sets them by hand)
 //
 // After each command from USB the Teensy prints "OK <cmd>" or
 // "ERR <cmd>" so the website can log whether the matrix took it.
@@ -95,14 +98,60 @@ constexpr uint8_t MASTER_BRIGHTNESS = 100;
 
 
 // ------------------------------------------------------------
+// Modulating (flicker) pixel brightness
+// ------------------------------------------------------------
+//
+// Dims the flicker pixels' ON state: 100 % = full, 0 % = off.
+// Set with D<0-100>.
+//
+
+int flickerPct = 100;
+uint8_t flickerScale = 255;
+
+
+// ------------------------------------------------------------
 // Steady (continuous) pixel brightness
 // ------------------------------------------------------------
 //
 // Scales only the pixels that do NOT flicker (mask = 0).
-// 255 = full, 0 = off. Set from the LCD with B<0-100> (percent).
+// 255 = full, 0 = off.
+//
+// AUTO-MATCH (default): steady pixels are set so they look as bright
+// as the flicker pixels to the eye.
+//
+// Above the flicker-fusion rate the eye sees the TIME AVERAGE of a
+// flickering light (Talbot-Plateau law). The flicker pixels are ON
+// half the time and OFF half the time (50 % duty), so they look like
+//
+//     average = flicker brightness x duty
+//             = flickerScale x 0.5
+//
+// so the steady pixels are set to that average:
+//
+//     steadyScale = flickerScale x 0.5 x MATCH_TRIM
+//
+//   D100 -> flicker 255, steady 128
+//   D60  -> flicker 153, steady  77
+//
+// With the flicker off (F0) the flicker pixels stay ON (duty = 1),
+// so steady = flickerScale.
+//
+// This works without gamma correction because both are LED PWM
+// values: light output is linear in the PWM value, and the eye
+// averages light, not PWM steps.
+//
+// MATCH_TRIM: fine-tune by eye if the letters are still faintly
+// visible (> 1 makes the steady pixels brighter).
+//
+// B<pct> sets the steady pixels by hand and switches auto-match off;
+// A switches it back on.
 //
 
-uint8_t steadyScale = 255;
+constexpr float FLICKER_DUTY = 0.5f;   // ON time / full period
+constexpr float MATCH_TRIM = 1.0f;
+
+bool autoMatch = true;
+uint8_t steadyScale = 128;
 
 // Set when the mask or brightness changes, so the panel is redrawn
 // even while the flicker is off (F0).
@@ -181,6 +230,29 @@ int XY(int x, int y) {
 // POTENTIOMETER
 // ============================================================
 
+// Recalculates the steady brightness from the flicker brightness.
+void updateSteady() {
+
+  if (!autoMatch) {
+    return;
+  }
+
+  // Flicker off (F0): flicker pixels are always ON.
+  float duty =
+    (selectedFreq > 0) ? FLICKER_DUTY : 1.0f;
+
+  float v =
+    flickerScale * duty * MATCH_TRIM;
+
+  if (v > 255.0f) {
+    v = 255.0f;
+  }
+
+  steadyScale = (uint8_t)(v + 0.5f);
+  needRender = true;
+}
+
+
 void applyFrequency(
   int freq
 ) {
@@ -196,12 +268,16 @@ void applyFrequency(
     selectedState = true;
     needRender = true;
 
+    updateSteady();
+
     return;
   }
 
   selectedInterval =
     1000000UL /
     (2UL * selectedFreq);
+
+  updateSteady();
 }
 
 
@@ -255,7 +331,9 @@ void readPot() {
 // LCD -> Teensy (one command per line):
 //
 //   F<hz>        flicker frequency, 0 (off) to 2000
-//   B<pct>       steady-pixel brightness, 0-100 %
+//   B<pct>       steady-pixel brightness, 0-100 % (turns auto-match off)
+//   D<pct>       flicker-pixel brightness, 0-100 %
+//   A            steady pixels auto-match the flicker pixels again
 //   P<idx>,<0|1> set one pixel of the flicker mask
 //   M<256 x 0|1> replace the whole mask
 //   R            give frequency control back to the pot
@@ -308,12 +386,13 @@ bool handleCommand(
 
       if (pct >= 0 && pct <= 100) {
 
+        autoMatch = false;
         steadyScale = (uint8_t)((pct * 255 + 50) / 100);
         needRender = true;
 
         Serial.print("  -> B applied: steady brightness ");
         Serial.print(pct);
-        Serial.println(" %");
+        Serial.println(" % (auto-match off, send A to turn it back on)");
 
       } else {
 
@@ -406,6 +485,45 @@ bool handleCommand(
 
       break;
     }
+
+    case 'D': {
+
+      // Flicker-pixel brightness in percent, 0-100.
+      int pct = atoi(s + 1);
+
+      if (s[1] != '\0' && pct >= 0 && pct <= 100) {
+
+        flickerPct = pct;
+        flickerScale = (uint8_t)((pct * 255 + 50) / 100);
+        needRender = true;
+
+        updateSteady();
+
+        Serial.print("  -> D applied: flicker brightness ");
+        Serial.print(pct);
+        Serial.print(" % | steady ");
+        Serial.print(steadyScale);
+        Serial.println(autoMatch ? "/255 (auto-match)" : "/255 (manual)");
+
+      } else {
+
+        Serial.println("  -> D rejected, need 0-100");
+        ok = false;
+      }
+
+      break;
+    }
+
+    case 'A':
+
+      autoMatch = true;
+      updateSteady();
+
+      Serial.print("  -> A applied: auto-match on, steady ");
+      Serial.print(steadyScale);
+      Serial.println("/255");
+
+      break;
 
     case 'C':
 
@@ -600,8 +718,15 @@ void renderFrame() {
           selectedState
         ) {
 
-          leds[ledIndex] =
+          CRGB flickerColor =
             backgroundColor;
+
+          flickerColor.nscale8_video(
+            flickerScale
+          );
+
+          leds[ledIndex] =
+            flickerColor;
 
         } else {
 
@@ -678,6 +803,8 @@ void setup() {
     pixelMask[i] =
       PIXEL_MASK[i];
   }
+
+  updateSteady();
 
   delay(100);
 

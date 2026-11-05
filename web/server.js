@@ -15,9 +15,6 @@ const path = require('path');
 
 const PORT = process.env.PORT || 3000;
 
-// If set, /api/stream needs ?token=<BRIDGE_TOKEN> (entered once on the laptop).
-const BRIDGE_TOKEN = process.env.BRIDGE_TOKEN || '';
-
 // Seconds one visitor has to wait between sends.
 const COOLDOWN_MS = Number(process.env.COOLDOWN_SECONDS || 3) * 1000;
 
@@ -128,10 +125,7 @@ function handleSend(req, res) {
   });
 }
 
-function handleAck(req, res, url) {
-  if (BRIDGE_TOKEN && url.searchParams.get('token') !== BRIDGE_TOKEN) {
-    return json(res, 401, { ok: false, error: 'Bad token' });
-  }
+function handleAck(req, res) {
   readBody(req, 256, (raw) => {
     let id;
     try { id = Number(JSON.parse(raw).id); } catch { id = NaN; }
@@ -141,9 +135,6 @@ function handleAck(req, res, url) {
 }
 
 function handleStream(req, res, url) {
-  if (BRIDGE_TOKEN && url.searchParams.get('token') !== BRIDGE_TOKEN) {
-    return json(res, 401, { ok: false, error: 'Bad token' });
-  }
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -187,7 +178,7 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'POST' && url.pathname === '/api/send') return handleSend(req, res);
   if (req.method === 'GET' && url.pathname === '/api/stream') return handleStream(req, res, url);
-  if (req.method === 'POST' && url.pathname === '/api/ack') return handleAck(req, res, url);
+  if (req.method === 'POST' && url.pathname === '/api/ack') return handleAck(req, res);
   if (req.method === 'GET' && url.pathname === '/api/status') return json(res, 200, { bridges: bridges.size, latest });
   if (req.method === 'GET') return serveStatic(res, url.pathname);
 
@@ -203,5 +194,4 @@ setInterval(() => {
 
 server.listen(PORT, () => {
   console.log(`listening on http://localhost:${PORT}`);
-  if (!BRIDGE_TOKEN) console.log('warning: BRIDGE_TOKEN not set, anyone can open /api/stream');
 });

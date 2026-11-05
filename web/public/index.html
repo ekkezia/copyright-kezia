@@ -367,7 +367,7 @@ render();
 // ============================================================
 //
 // Desktop Chrome/Edge only (Web Serial). Click "connect teensy" and
-// pick the Teensy. (If BRIDGE_TOKEN is set on Render, it asks for it once.)
+// pick the Teensy.
 // From then on every submission from the server is written to the
 // Teensy as  M<256 x 0|1>\n . Reconnects by itself after a reload or
 // when the cable is plugged back in.
@@ -385,12 +385,6 @@ const link = {
 };
 const linkStatus = document.getElementById('linkStatus');
 
-function getToken() {
-  try { return localStorage.getItem('bridgeToken') || ''; } catch { return ''; }
-}
-function saveToken(t) {
-  try { t ? localStorage.setItem('bridgeToken', t) : localStorage.removeItem('bridgeToken'); } catch {}
-}
 function showLink(extra) {
   if (extra) link.last = extra;
   const parts = [
@@ -414,22 +408,15 @@ function setLinked() {
 
 function startStream() {
   if (link.es) return;
-  const token = getToken();
-  link.es = new EventSource('/api/stream' + (token ? '?token=' + encodeURIComponent(token) : ''));
+  link.es = new EventSource('/api/stream');
   link.es.onopen = () => { link.serverOk = true; showLink(); checkLive(); };
   link.es.onerror = () => {
     link.serverOk = false;
     if (link.es.readyState === EventSource.CLOSED) {
-      // Server refused: BRIDGE_TOKEN is set on Render and ours is missing/wrong.
+      // Browser gave up (e.g. Render returned an error while waking up).
       link.es = null;
-      saveToken('');
-      const t = prompt('This server needs BRIDGE_TOKEN (Render → your service → Environment):');
-      if (t && t.trim()) {
-        saveToken(t.trim());
-        startStream();
-      } else {
-        showLink('server needs a token, click connect again');
-      }
+      showLink('server unreachable, retrying…');
+      setTimeout(startStream, 5000);
     } else {
       showLink();
     }
@@ -509,8 +496,7 @@ async function writeTeensy(line, id) {
 
 // Tell the server the Teensy took it, so every visitor sees "on the matrix".
 function ackServer(id) {
-  const token = getToken();
-  fetch('/api/ack' + (token ? '?token=' + encodeURIComponent(token) : ''), {
+  fetch('/api/ack', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id }),

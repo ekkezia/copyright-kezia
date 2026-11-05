@@ -9,4 +9,3 @@ services:
     buildCommand: echo "no build"
     startCommand: node server.js
     plan: free
-    # Optional: add BRIDGE_TOKEN so only your laptop can receive words.

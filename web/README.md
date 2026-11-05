@@ -21,13 +21,12 @@ Each submission arrives as one line: `M` + 256 × `0/1` + newline.
 The server has no dependencies (Node 18+).
 
 - **Blueprint:** push the repo, then in Render choose *New → Blueprint*, pick this repo and set **Blueprint Path** to `web/render.yaml`. It sets `rootDir: web`.
-- **Or manually:** *New → Web Service*, Root Directory `web`, Build Command `echo ok`, Start Command `node server.js`, No environment variables are needed.
+- **Or manually:** *New → Web Service*, Root Directory `web`, Build Command `echo ok`, Start Command `node server.js`. No environment variables are needed.
 
 Optional env vars:
 
 | Var | Default | What it does |
 |---|---|---|
-| `BRIDGE_TOKEN` | (none) | Optional password so only your laptop can receive drawings. If set, the page asks for it once when you click **connect teensy**. |
 | `COOLDOWN_SECONDS` | `3` | How long each visitor waits between sends |
 | `MIRROR` | `0` | Set `1` if the word appears mirrored left↔right on the matrix |
 | `FLIP` | `0` | Set `1` if it appears upside down |
